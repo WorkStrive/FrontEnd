@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, Home, Briefcase, PlusCircle } from 'lucide-react';
+import { LogOut, Home, Briefcase, PlusCircle, User } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const Navbar = () => {
@@ -36,23 +36,31 @@ const Navbar = () => {
                     </Link>
                 </div>
             </div>
-            <button
-                onClick={handleLogout}
-                style={{
-                    background: 'none',
-                    color: 'var(--text-muted)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    fontSize: '0.9rem',
-                    transition: 'var(--transition)'
-                }}
-                onMouseOver={(e) => e.target.style.color = 'var(--danger)'}
-                onMouseOut={(e) => e.target.style.color = 'var(--text-muted)'}
-            >
-                <LogOut size={18} />
-                Logout
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                <Link to="/profile" style={{ color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '500' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(37, 99, 235, 0.1)', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--primary)' }}>
+                        <User size={16} />
+                    </div>
+                    Profile
+                </Link>
+                <button
+                    onClick={handleLogout}
+                    style={{
+                        background: 'none',
+                        color: 'var(--text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.9rem',
+                        transition: 'var(--transition)'
+                    }}
+                    onMouseOver={(e) => e.target.style.color = 'var(--danger)'}
+                    onMouseOut={(e) => e.target.style.color = 'var(--text-muted)'}
+                >
+                    <LogOut size={18} />
+                    Logout
+                </button>
+            </div>
         </nav>
     );
 };

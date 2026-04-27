@@ -4,6 +4,8 @@ import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ProjectDetailsPage from './pages/ProjectDetailsPage';
+import ProfilePage from './pages/ProfilePage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -19,6 +21,7 @@ function App() {
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/" element={
                 <PrivateRoute>
                   <DashboardPage />
@@ -27,6 +30,11 @@ function App() {
               <Route path="/project/:id" element={
                 <PrivateRoute>
                   <ProjectDetailsPage />
+                </PrivateRoute>
+              } />
+              <Route path="/profile" element={
+                <PrivateRoute>
+                  <ProfilePage />
                 </PrivateRoute>
               } />
             </Routes>

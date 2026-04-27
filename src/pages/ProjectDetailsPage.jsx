@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, CheckCircle, Circle, Trash2, Wand2, User, Users, Clock, Mail, Shield, UserMinus } from 'lucide-react';
+import { ChevronLeft, Plus, CheckCircle, Circle, Trash2, Wand2, User, Users, Clock, Mail, Shield, UserMinus, Edit2, Settings } from 'lucide-react';
 import client from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -15,7 +15,10 @@ const ProjectDetailsPage = () => {
 
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [showMemberModal, setShowMemberModal] = useState(false);
-    const [newTask, setNewTask] = useState({ title: '', description: '' });
+    const [showProjectModal, setShowProjectModal] = useState(false);
+    const [taskForm, setTaskForm] = useState({ title: '', description: '' });
+    const [editingTask, setEditingTask] = useState(null);
+    const [projectForm, setProjectForm] = useState({ name: '', description: '' });
     const [newMember, setNewMember] = useState({ email: '', role: 'MEMBER' });
 
     const [suggesting, setSuggesting] = useState(false);
@@ -28,16 +31,30 @@ const ProjectDetailsPage = () => {
 
     const fetchInitialData = async () => {
         try {
-            const [projRes, tasksRes, membersRes, profileRes] = await Promise.all([
-                client.get(`/projects/${id}`),
-                client.get(`/projects/${id}/tasks`),
-                client.get(`/projects/${id}/members`),
-                client.get(`/auth/me`)
-            ]);
-            setProject(projRes.data);
-            setTasks(tasksRes.data.data);
-            setMembers(membersRes.data.data);
-            setCurrentUser(profileRes.data);
+            const projRes = await client.get(`/projects/${id}`);
+            setProject(projRes.data?.data || projRes.data);
+
+            let profileData = null;
+            try {
+                const profileRes = await client.get(`/auth/me`);
+                profileData = profileRes.data?.data || profileRes.data;
+            } catch (e) {}
+            setCurrentUser(profileData);
+
+            let tasksData = [];
+            try {
+                const tasksRes = await client.get(`/tasks/projects/${id}/tasks`).catch(() => client.get(`/tasks?projectId=${id}`));
+                tasksData = tasksRes.data?.data || tasksRes.data;
+            } catch (e) {}
+            setTasks(Array.isArray(tasksData) ? tasksData : []);
+
+            let membersData = [];
+            try {
+                const membersRes = await client.get(`/projects/${id}/members`);
+                membersData = membersRes.data?.data || membersRes.data;
+            } catch (e) {}
+            setMembers(Array.isArray(membersData) ? membersData : []);
+
         } catch (err) {
             console.error('Failed to fetch project details', err);
             navigate('/');
@@ -48,35 +65,76 @@ const ProjectDetailsPage = () => {
 
     const refreshData = async () => {
         try {
-            const [projRes, tasksRes, membersRes] = await Promise.all([
-                client.get(`/projects/${id}`),
-                client.get(`/projects/${id}/tasks`),
-                client.get(`/projects/${id}/members`)
-            ]);
-            setProject(projRes.data);
-            setTasks(tasksRes.data.data);
-            setMembers(membersRes.data.data);
+            const projRes = await client.get(`/projects/${id}`);
+            setProject(projRes.data?.data || projRes.data);
+
+            try {
+                const tasksRes = await client.get(`/tasks/projects/${id}/tasks`).catch(() => client.get(`/tasks?projectId=${id}`));
+                const tasksData = tasksRes.data?.data || tasksRes.data;
+                setTasks(Array.isArray(tasksData) ? tasksData : []);
+            } catch (e) {}
+
+            try {
+                const membersRes = await client.get(`/projects/${id}/members`);
+                const membersData = membersRes.data?.data || membersRes.data;
+                setMembers(Array.isArray(membersData) ? membersData : []);
+            } catch (e) {}
         } catch (err) {
             console.error('Failed to refresh data', err);
         }
     };
 
-    const handleCreateTask = async (e) => {
+    const handleSaveTask = async (e) => {
         e.preventDefault();
         try {
-            await client.post(`/projects/${id}/tasks`, newTask);
+            if (editingTask) {
+                await client.patch(`/tasks/tasks/${editingTask.id || editingTask._id}`, taskForm);
+            } else {
+                await client.post(`/tasks/projects/${id}/tasks`, taskForm);
+            }
             setShowTaskModal(false);
-            setNewTask({ title: '', description: '' });
+            setEditingTask(null);
+            setTaskForm({ title: '', description: '' });
             refreshData();
         } catch (err) {
-            console.error('Failed to create task', err);
+            console.error('Failed to save task', err);
+            alert('Could not save task. ' + (err.response?.data?.message || err.message));
+        }
+    };
+
+    const openEditTaskModal = (task) => {
+        setEditingTask(task);
+        setTaskForm({ title: task.title || task.name || '', description: task.description || '' });
+        setShowTaskModal(true);
+    };
+
+    const handleUpdateProject = async (e) => {
+        e.preventDefault();
+        try {
+            await client.patch(`/projects/${id}`, projectForm);
+            setShowProjectModal(false);
+            refreshData();
+        } catch (err) {
+            console.error('Failed to update project', err);
+            alert('Could not update project.');
+        }
+    };
+
+    const handleDeleteProject = async () => {
+        if (!window.confirm("Are you sure you want to permanently delete this project and all its tasks?")) return;
+        try {
+            await client.delete(`/projects/${id}`);
+            navigate('/');
+        } catch (err) {
+            console.error('Failed to delete project', err);
+            alert('Could not delete project.');
         }
     };
 
     const handleToggleTask = async (task) => {
         try {
             const newStatus = task.status === 'DONE' ? 'TODO' : 'DONE';
-            await client.patch(`/tasks/${task.id}`, { status: newStatus });
+            await client.patch(`/tasks/tasks/${task.id || task._id}`, { status: newStatus });
             refreshData();
         } catch (err) {
             console.error('Failed to update task', err);
@@ -85,7 +143,7 @@ const ProjectDetailsPage = () => {
 
     const handleDeleteTask = async (taskId) => {
         try {
-            await client.delete(`/tasks/${taskId}`);
+            await client.delete(`/tasks/tasks/${taskId}`);
             refreshData();
         } catch (err) {
             console.error('Failed to delete task', err);
@@ -149,9 +207,21 @@ const ProjectDetailsPage = () => {
 
             <header style={{ marginBottom: '2.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                    <div>
-                        <h1 style={{ fontSize: '2.2rem', fontWeight: '800', marginBottom: '0.5rem' }}>{project.name}</h1>
-                        <p style={{ color: 'var(--text-muted)', maxWidth: '600px' }}>{project.description}</p>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.5rem' }}>
+                            <h1 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0 }}>{project.name}</h1>
+                            {isOwner && (
+                                <>
+                                    <button onClick={() => { setProjectForm({ name: project.name, description: project.description || '' }); setShowProjectModal(true); }} style={{ background: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }} title="Edit Project">
+                                        <Settings size={20} />
+                                    </button>
+                                    <button onClick={handleDeleteProject} style={{ background: 'none', color: 'rgba(239, 68, 68, 0.6)', cursor: 'pointer', padding: '4px' }} title="Delete Project">
+                                        <Trash2 size={20} />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', maxWidth: '600px', margin: 0 }}>{project.description}</p>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         {activeTab === 'tasks' ? (
@@ -176,7 +246,7 @@ const ProjectDetailsPage = () => {
                                     {suggesting ? 'Thinking...' : 'AI Suggest'}
                                 </button>
                                 <button
-                                    onClick={() => setShowTaskModal(true)}
+                                    onClick={() => { setEditingTask(null); setTaskForm({ title: '', description: '' }); setShowTaskModal(true); }}
                                     style={{
                                         padding: '0.7rem 1.2rem',
                                         background: 'var(--primary)',
@@ -252,12 +322,17 @@ const ProjectDetailsPage = () => {
                                                 {task.status === 'DONE' ? <CheckCircle size={24} /> : <Circle size={24} />}
                                             </button>
                                             <div style={{ flex: 1 }}>
-                                                <h4 style={{ fontSize: '1rem', textDecoration: task.status === 'DONE' ? 'line-through' : 'none', color: task.status === 'DONE' ? 'var(--text-muted)' : 'var(--text-main)' }}>{task.name}</h4>
+                                                <h4 style={{ fontSize: '1rem', textDecoration: task.status === 'DONE' ? 'line-through' : 'none', color: task.status === 'DONE' ? 'var(--text-muted)' : 'var(--text-main)' }}>{task.title || task.name}</h4>
                                                 {task.description && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{task.description}</p>}
                                             </div>
-                                            <button onClick={() => handleDeleteTask(task.id)} style={{ background: 'none', color: 'rgba(239, 68, 68, 0.4)', transition: 'var(--transition)' }} onMouseOver={e => e.currentTarget.style.color = 'var(--danger)'} onMouseOut={e => e.currentTarget.style.color = 'rgba(239, 68, 68, 0.4)'}>
-                                                <Trash2 size={18} />
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button onClick={() => openEditTaskModal(task)} style={{ background: 'none', color: 'var(--text-muted)', transition: 'var(--transition)' }} onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'} onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                                                    <Edit2 size={18} />
+                                                </button>
+                                                <button onClick={() => handleDeleteTask(task.id || task._id)} style={{ background: 'none', color: 'rgba(239, 68, 68, 0.4)', transition: 'var(--transition)' }} onMouseOver={e => e.currentTarget.style.color = 'var(--danger)'} onMouseOut={e => e.currentTarget.style.color = 'rgba(239, 68, 68, 0.4)'}>
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>
@@ -312,8 +387,10 @@ const ProjectDetailsPage = () => {
                                 <div style={{ width: 45, height: 45, borderRadius: '50%', background: 'var(--border)', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--primary)' }}>
                                     <User size={24} />
                                 </div>
-                                <div style={{ flex: 1 }}>
-                                    <h4 style={{ fontSize: '0.95rem', fontWeight: '600' }}>{member.user?.name || 'Member'}</h4>
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <h4 style={{ fontSize: '0.95rem', fontWeight: '600', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {member.user?.email || member.email || `Utilisateur #${member.userId}`}
+                                    </h4>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                         <Shield size={12} />
                                         {member.role}
@@ -335,27 +412,57 @@ const ProjectDetailsPage = () => {
                 {showTaskModal && (
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
                         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="glass" style={{ width: '100%', maxWidth: '500px', padding: '2rem' }}>
-                            <h2 style={{ marginBottom: '1.5rem' }}>Add New Task</h2>
-                            <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <h2 style={{ marginBottom: '1.5rem' }}>{editingTask ? 'Update Task' : 'Add New Task'}</h2>
+                            <form onSubmit={handleSaveTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 <input
                                     type="text"
                                     placeholder="Task Title"
                                     className="glass"
                                     style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.05)', color: 'white' }}
-                                    value={newTask.title}
-                                    onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                                    value={taskForm.title}
+                                    onChange={e => setTaskForm({ ...taskForm, title: e.target.value })}
                                     required
                                 />
                                 <textarea
                                     placeholder="Task Description"
                                     className="glass"
                                     style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.05)', color: 'white', minHeight: '100px' }}
-                                    value={newTask.description}
-                                    onChange={e => setNewTask({ ...newTask, description: e.target.value })}
+                                    value={taskForm.description}
+                                    onChange={e => setTaskForm({ ...taskForm, description: e.target.value })}
                                 />
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                                     <button type="button" onClick={() => setShowTaskModal(false)} style={{ flex: 1, padding: '0.8rem', background: 'none', border: '1px solid var(--border)', color: 'white', borderRadius: '8px' }}>Cancel</button>
-                                    <button type="submit" style={{ flex: 1, padding: '0.8rem', background: 'var(--primary)', color: 'white', borderRadius: '8px', fontWeight: '600' }}>Add Task</button>
+                                    <button type="submit" style={{ flex: 1, padding: '0.8rem', background: 'var(--primary)', color: 'white', borderRadius: '8px', fontWeight: '600' }}>{editingTask ? 'Save Changes' : 'Add Task'}</button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+
+                {showProjectModal && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="glass" style={{ width: '100%', maxWidth: '500px', padding: '2rem' }}>
+                            <h2 style={{ marginBottom: '1.5rem' }}>Update Project Configuration</h2>
+                            <form onSubmit={handleUpdateProject} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Project Name"
+                                    className="glass"
+                                    style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.05)', color: 'white' }}
+                                    value={projectForm.name}
+                                    onChange={e => setProjectForm({ ...projectForm, name: e.target.value })}
+                                    required
+                                />
+                                <textarea
+                                    placeholder="Project Description"
+                                    className="glass"
+                                    style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.05)', color: 'white', minHeight: '100px' }}
+                                    value={projectForm.description}
+                                    onChange={e => setProjectForm({ ...projectForm, description: e.target.value })}
+                                />
+                                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                                    <button type="button" onClick={() => setShowProjectModal(false)} style={{ flex: 1, padding: '0.8rem', background: 'none', border: '1px solid var(--border)', color: 'white', borderRadius: '8px' }}>Cancel</button>
+                                    <button type="submit" style={{ flex: 1, padding: '0.8rem', background: 'var(--primary)', color: 'white', borderRadius: '8px', fontWeight: '600' }}>Update Project</button>
                                 </div>
                             </form>
                         </motion.div>
